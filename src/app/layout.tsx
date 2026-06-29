@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "QK Content Generator",
   description: "AI-powered social content generator for Queenless Kings",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

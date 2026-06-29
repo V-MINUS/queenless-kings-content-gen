@@ -5,10 +5,12 @@
  * Each request picks the next provider/key in round-robin order; on failure
  * we cycle through all available keys before giving up.
  *
- * Add keys via comma-separated env vars:
- *   GROQ_API_KEYS, GEMINI_API_KEYS, OPENROUTER_API_KEYS, CEREBRAS_API_KEYS,
- *   GITHUB_MODELS_TOKENS, MISTRAL_API_KEYS, COHERE_API_KEYS,
- *   TOGETHER_API_KEYS, DEEPSEEK_API_KEYS, OPENAI_API_KEYS
+ * Active round-robin providers (set keys in .env.local — never commit keys):
+ *   GROQ_API_KEYS, DEEPSEEK_API_KEYS, SAMBANOVA_API_KEYS,
+ *   NVIDIA_API_KEYS (shared across 4 models: llama-3.3, nemotron, mixtral, solar)
+ * Optional providers (add keys to enable):
+ *   GEMINI_API_KEYS, CEREBRAS_API_KEYS, OPENAI_API_KEYS, MISTRAL_API_KEYS,
+ *   OPENROUTER_API_KEYS, TOGETHER_API_KEYS, HUGGINGFACE_API_KEYS, XAI_API_KEYS
  */
 
 export type ProviderName =
@@ -25,6 +27,10 @@ export type ProviderName =
   | "pollinations"
   | "hyperbolic"
   | "nvidia"
+  | "nvidia_nemotron"
+  | "nvidia_mixtral"
+  | "nvidia_minimax"
+  | "nvidia_solar"
   | "huggingface"
   | "sambanova"
   | "xai";
@@ -55,7 +61,7 @@ export const PROVIDERS: ProviderConfig[] = [
     name: "cerebras",
     envVar: "CEREBRAS_API_KEYS",
     modelEnvVar: "CEREBRAS_MODEL",
-    defaultModel: "llama3.1-70b",
+    defaultModel: "gpt-oss-120b",
     baseUrl: "https://api.cerebras.ai/v1",
     style: "openai",
     freeTier: "1M tokens/day, fastest inference",
@@ -154,10 +160,37 @@ export const PROVIDERS: ProviderConfig[] = [
     name: "nvidia",
     envVar: "NVIDIA_API_KEYS",
     modelEnvVar: "NVIDIA_MODEL",
-    defaultModel: "meta/llama-3.1-70b-instruct",
+    defaultModel: "meta/llama-3.3-70b-instruct",
     baseUrl: "https://integrate.api.nvidia.com/v1",
     style: "openai",
-    freeTier: "1000 free credits on signup, generous monthly limits",
+    freeTier: "NVIDIA NIM free tier, generous monthly limits",
+  },
+  {
+    name: "nvidia_nemotron",
+    envVar: "NVIDIA_API_KEYS",
+    modelEnvVar: "NVIDIA_NEMOTRON_MODEL",
+    defaultModel: "nvidia/llama-3.3-nemotron-super-49b-v1",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    style: "openai",
+    freeTier: "NVIDIA NIM free tier (shares NVIDIA_API_KEYS)",
+  },
+  {
+    name: "nvidia_mixtral",
+    envVar: "NVIDIA_API_KEYS",
+    modelEnvVar: "NVIDIA_MIXTRAL_MODEL",
+    defaultModel: "mistralai/mixtral-8x7b-instruct-v0.1",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    style: "openai",
+    freeTier: "NVIDIA NIM free tier (shares NVIDIA_API_KEYS)",
+  },
+  {
+    name: "nvidia_solar",
+    envVar: "NVIDIA_API_KEYS",
+    modelEnvVar: "NVIDIA_SOLAR_MODEL",
+    defaultModel: "upstage/solar-10.7b-instruct",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    style: "openai",
+    freeTier: "NVIDIA NIM free tier (shares NVIDIA_API_KEYS)",
   },
   {
     name: "huggingface",
@@ -172,7 +205,7 @@ export const PROVIDERS: ProviderConfig[] = [
     name: "sambanova",
     envVar: "SAMBANOVA_API_KEYS",
     modelEnvVar: "SAMBANOVA_MODEL",
-    defaultModel: "Meta-Llama-3.1-70B-Instruct",
+    defaultModel: "Meta-Llama-3.3-70B-Instruct",
     baseUrl: "https://api.sambanova.ai/v1",
     style: "openai",
     freeTier: "free tier with reasonable daily limits, very fast",
@@ -205,6 +238,7 @@ interface CallResult {
   totalKeys: number;
   attempts: number;
   elapsedMs: number;
+  skipped?: string[];
 }
 
 /** Module-level rotation cursor (per Worker instance — survives within a single edge isolate). */
@@ -419,10 +453,11 @@ export async function generate(
         totalKeys: nk,
         attempts: attempt + 1,
         elapsedMs: Date.now() - t0,
+        skipped: errors.length > 0 ? errors : undefined,
       };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      errors.push(`${provider.name}: ${msg}`);
+      errors.push(`${provider.name}: ${msg.slice(0, 100)}`);
       continue;
     }
   }

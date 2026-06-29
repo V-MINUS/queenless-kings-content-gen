@@ -9,7 +9,7 @@ import {
 } from "@/lib/prompts";
 import { checkPassword } from "@/lib/auth";
 
-export const runtime = "edge";
+export const maxDuration = 30;
 
 interface Body {
   mode: "preset" | "edit" | "freeform";

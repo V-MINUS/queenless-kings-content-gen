@@ -2,9 +2,22 @@ node_modules/
 .next/
 .vercel/
 out/
+
+# Security: ALL env files with secrets
 .env
+.env.*
 .env.local
 .env.*.local
+.env.production
+.env.development
+
 .DS_Store
 *.log
 .wrangler/
+
+# IDE
+.vscode/
+.idea/
+
+# Test artifacts
+test_payload.json
